@@ -205,13 +205,13 @@ st.markdown("### 🔹 Pre-ECM Baseline Load Profile")
 st.line_chart(df_base["Load Consumption (kW)"])
 
 # ----------------------------------------------------
-# FULL M&V TIMELINE (CORRECT & STABLE)
+# FULL M&V TIMELINE (BASELINE → ADJUSTED BASELINE → ACTUAL)
 # ----------------------------------------------------
-st.markdown("### 🔹 Full M&V Timeline (Baseline → Adjusted Baseline → Actual)")
+st.markdown("### 🔹 Full M&V Timeline")
 
 ECM_DATE = pd.to_datetime("2024-05-01")
 
-# ✅ SAFE way to combine DateTime indexes
+# 1️⃣ Build a TRUE full timeline index (baseline + reporting)
 timeline_index = (
     df_base.index
     .union(df_s.index)
@@ -220,89 +220,72 @@ timeline_index = (
 
 timeline_df = pd.DataFrame(index=timeline_index)
 
+# 2️⃣ Assign series explicitly
+timeline_df["Baseline Load (kW)"] = df_base["Load Consumption (kW)"]
+timeline_df["Adjusted Baseline Power (kW)"] = df_s["Adjusted Baseline Power (kW)"]
+timeline_df["Actual Power (kW)"] = df_s["Actual Power (kW)"]
+
+# 3️⃣ Enforce IPMVP Option C logic
+# Baseline ONLY before ECM
+timeline_df.loc[timeline_df.index >= ECM_DATE, "Baseline Load (kW)"] = None
+
+# Adjusted + Actual ONLY after ECM
+timeline_df.loc[timeline_df.index < ECM_DATE, "Adjusted Baseline Power (kW)"] = None
+timeline_df.loc[timeline_df.index < ECM_DATE, "Actual Power (kW)"] = None
+
 # ----------------------------------------------------
-# Assign data explicitly (no implicit alignment bugs)
+# 4️⃣ Plot (Streamlit-native, stable, fast)
 # ----------------------------------------------------
-
-timeline_df["Baseline Load (Pre-ECM)"] = df_base["Load Consumption (kW)"]
-timeline_df["Adjusted Baseline (GRU)"] = df_s["Adjusted Baseline Power (kW)"]
-timeline_df["Actual Load"] = df_s["Actual Power (kW)"]
-
-
-# Masking to enforce IPMVP logic
-timeline_df.loc[timeline_df.index >= ECM_DATE, "Baseline Load (Pre-ECM)"] = None
-timeline_df.loc[timeline_df.index < ECM_DATE, "Adjusted Baseline (GRU)"] = None
-timeline_df.loc[timeline_df.index < ECM_DATE, "Actual Load"] = None
-
-# ----------------------------------------------------
-# Plot with Plotly (single authoritative plot)
-# ----------------------------------------------------
-fig = go.Figure()
-
-fig.add_trace(go.Scatter(
-    x=timeline_df.index,
-    y=timeline_df["Baseline Load (Pre-ECM)"],
-    mode="lines",
-    name="Baseline Load (Pre-ECM)",
-    line=dict(color="blue")
-))
-
-fig.add_trace(go.Scatter(
-    x=timeline_df.index,
-    y=timeline_df["Adjusted Baseline (GRU)"],
-    mode="lines",
-    name="Adjusted Baseline (GRU)",
-    line=dict(color="orange", dash="dash")
-))
-
-fig.add_trace(go.Scatter(
-    x=timeline_df.index,
-    y=timeline_df["Actual Load"],
-    mode="lines",
-    name="Actual Load",
-    line=dict(color="green")
-))
-
-# ECM vertical line (SAFE)
-fig.add_shape(
-    type="line",
-    x0=ECM_DATE,
-    x1=ECM_DATE,
-    y0=0,
-    y1=1,
-    xref="x",
-    yref="paper",
-    line=dict(color="red", width=2, dash="dot")
+st.line_chart(
+    timeline_df[
+        [
+            "Baseline Load (kW)",
+            "Adjusted Baseline Power (kW)",
+            "Actual Power (kW)",
+        ]
+    ]
 )
-
-fig.add_annotation(
-    x=ECM_DATE,
-    y=1,
-    xref="x",
-    yref="paper",
-    text="ECM Installation",
-    showarrow=False,
-    yanchor="bottom",
-    font=dict(color="red", size=12)
-)
-
-fig.update_layout(
-    xaxis_title="Date",
-    yaxis_title="Power (kW)",
-    legend_title="Legend",
-    height=520,
-    margin=dict(l=30, r=30, t=50, b=30)
-)
-
-st.plotly_chart(fig, use_container_width=True)
 
 st.caption(
-    "Vertical red line indicates ECM installation date. "
-    "Pre-ECM data represents baseline behaviour, while post-ECM "
-    "data shows GRU-adjusted baseline and measured consumption "
-    "in accordance with IPMVP Option C."
+    "Full Measurement & Verification (M&V) timeline in accordance with "
+    "IPMVP Option C. Pre-ECM baseline represents historical operating behaviour. "
+    "Post-ECM period shows GRU-adjusted baseline and measured consumption."
+)
+# ----------------------------------------------------
+# MONTHLY AGGREGATED M&V (REPORTING-LEVEL VIEW)
+# ----------------------------------------------------
+st.markdown("### 🔹 Monthly Aggregated M&V Performance")
+
+# 1️⃣ Create a copy to avoid side effects
+monthly_df = timeline_df.copy()
+
+# 2️⃣ Convert index to monthly period
+monthly_df["Month"] = monthly_df.index.to_period("M").to_timestamp()
+
+# 3️⃣ Aggregate using MEAN (power-based, Option C appropriate)
+monthly_agg = (
+    monthly_df
+    .groupby("Month")
+    .mean(numeric_only=True)
 )
 
+# 4️⃣ Plot
+st.line_chart(
+    monthly_agg[
+        [
+            "Baseline Load (kW)",
+            "Adjusted Baseline Power (kW)",
+            "Actual Power (kW)",
+        ]
+    ]
+)
+
+st.caption(
+    "Monthly aggregated M&V view showing average baseline load (pre-ECM), "
+    "GRU-adjusted baseline (post-ECM), and measured load. "
+    "This representation aligns with IPMVP Option C reporting practices "
+    "and improves interpretability by reducing short-term variability."
+)
 
 # ----------------------------------------------------
 # ADJUSTED BASELINE VS ACTUAL
