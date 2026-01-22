@@ -207,11 +207,35 @@ st.markdown("### 🔹 Full M&V Timeline (Baseline → Adjusted Baseline → Actu
 
 ECM_DATE = pd.to_datetime("2024-05-01")
 
-timeline_df = pd.concat([
-    df_base[["Load Consumption (kW)"]]
-        .rename(columns={"Load Consumption (kW)": "Baseline Load"}),
-    df_s[["Adjusted Baseline Power (kW)", "Actual Power (kW)"]]
-], axis=1)
+timeline_df = pd.DataFrame(index=pd.concat([
+    df_base.index,
+    df_s.index
+]).unique()).sort_index()
+
+# Pre-ECM baseline only
+timeline_df.loc[
+    timeline_df.index < ECM_DATE, "Baseline Load (Pre-ECM)"
+] = df_base["Load Consumption (kW)"]
+
+# Post-ECM adjusted baseline
+timeline_df.loc[
+    timeline_df.index >= ECM_DATE, "Adjusted Baseline (GRU)"
+] = df_s["Adjusted Baseline Power (kW)"]
+
+# Post-ECM actual
+timeline_df.loc[
+    timeline_df.index >= ECM_DATE, "Actual Load"
+] = df_s["Actual Power (kW)"]
+
+st.line_chart(
+    timeline_df[
+        [
+            "Baseline Load (Pre-ECM)",
+            "Adjusted Baseline (GRU)",
+            "Actual Load"
+        ]
+    ]
+)
 
 fig = go.Figure()
 
