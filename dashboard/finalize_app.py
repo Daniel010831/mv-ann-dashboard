@@ -224,14 +224,10 @@ timeline_df = pd.DataFrame(index=timeline_index)
 # Assign data explicitly (no implicit alignment bugs)
 # ----------------------------------------------------
 
-# Pre-ECM baseline
 timeline_df["Baseline Load (Pre-ECM)"] = df_base["Load Consumption (kW)"]
-
-# Post-ECM adjusted baseline
 timeline_df["Adjusted Baseline (GRU)"] = df_s["Adjusted Baseline Power (kW)"]
-
-# Post-ECM actual
 timeline_df["Actual Load"] = df_s["Actual Power (kW)"]
+
 
 # Masking to enforce IPMVP logic
 timeline_df.loc[timeline_df.index >= ECM_DATE, "Baseline Load (Pre-ECM)"] = None
