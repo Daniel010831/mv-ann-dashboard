@@ -1,5 +1,9 @@
 # dashboard/finalize_app.py
 # RUN -> streamlit run dashboard/finalize_app.py
+#git add dashboard/finalize_app.py
+#git commit -m "Fix Full M&V timeline index handling and ECM separation"
+#git push origin main
+
 import plotly.graph_objects as go
 import streamlit as st
 import pandas as pd
@@ -201,75 +205,69 @@ st.markdown("### 🔹 Pre-ECM Baseline Load Profile")
 st.line_chart(df_base["Load Consumption (kW)"])
 
 # ----------------------------------------------------
-# FULL M&V TIMELINE
+# FULL M&V TIMELINE (CORRECT & STABLE)
 # ----------------------------------------------------
 st.markdown("### 🔹 Full M&V Timeline (Baseline → Adjusted Baseline → Actual)")
 
 ECM_DATE = pd.to_datetime("2024-05-01")
 
-timeline_df = pd.DataFrame(index=pd.concat([
-    df_base.index,
-    df_s.index
-]).unique()).sort_index()
-
-# Pre-ECM baseline only
-timeline_df.loc[
-    timeline_df.index < ECM_DATE, "Baseline Load (Pre-ECM)"
-] = df_base["Load Consumption (kW)"]
-
-# Post-ECM adjusted baseline
-timeline_df.loc[
-    timeline_df.index >= ECM_DATE, "Adjusted Baseline (GRU)"
-] = df_s["Adjusted Baseline Power (kW)"]
-
-# Post-ECM actual
-timeline_df.loc[
-    timeline_df.index >= ECM_DATE, "Actual Load"
-] = df_s["Actual Power (kW)"]
-
-st.line_chart(
-    timeline_df[
-        [
-            "Baseline Load (Pre-ECM)",
-            "Adjusted Baseline (GRU)",
-            "Actual Load"
-        ]
-    ]
+# ✅ SAFE way to combine DateTime indexes
+timeline_index = (
+    df_base.index
+    .union(df_s.index)
+    .sort_values()
 )
 
+timeline_df = pd.DataFrame(index=timeline_index)
+
+# ----------------------------------------------------
+# Assign data explicitly (no implicit alignment bugs)
+# ----------------------------------------------------
+
+# Pre-ECM baseline
+timeline_df["Baseline Load (Pre-ECM)"] = df_base["Load Consumption (kW)"]
+
+# Post-ECM adjusted baseline
+timeline_df["Adjusted Baseline (GRU)"] = df_s["Adjusted Baseline Power (kW)"]
+
+# Post-ECM actual
+timeline_df["Actual Load"] = df_s["Actual Power (kW)"]
+
+# Masking to enforce IPMVP logic
+timeline_df.loc[timeline_df.index >= ECM_DATE, "Baseline Load (Pre-ECM)"] = None
+timeline_df.loc[timeline_df.index < ECM_DATE, "Adjusted Baseline (GRU)"] = None
+timeline_df.loc[timeline_df.index < ECM_DATE, "Actual Load"] = None
+
+# ----------------------------------------------------
+# Plot with Plotly (single authoritative plot)
+# ----------------------------------------------------
 fig = go.Figure()
 
-# Baseline
-if "Baseline Load" in timeline_df.columns:
-    fig.add_trace(go.Scatter(
-        x=timeline_df.index,
-        y=timeline_df["Baseline Load"],
-        mode="lines",
-        name="Baseline Load (Pre-ECM)",
-        line=dict(color="blue")
-    ))
+fig.add_trace(go.Scatter(
+    x=timeline_df.index,
+    y=timeline_df["Baseline Load (Pre-ECM)"],
+    mode="lines",
+    name="Baseline Load (Pre-ECM)",
+    line=dict(color="blue")
+))
 
-# Adjusted Baseline
-if "Adjusted Baseline Power (kW)" in timeline_df.columns:
-    fig.add_trace(go.Scatter(
-        x=timeline_df.index,
-        y=timeline_df["Adjusted Baseline Power (kW)"],
-        mode="lines",
-        name="Adjusted Baseline (GRU)",
-        line=dict(color="orange", dash="dash")
-    ))
+fig.add_trace(go.Scatter(
+    x=timeline_df.index,
+    y=timeline_df["Adjusted Baseline (GRU)"],
+    mode="lines",
+    name="Adjusted Baseline (GRU)",
+    line=dict(color="orange", dash="dash")
+))
 
-# Actual
-if "Actual Power (kW)" in timeline_df.columns:
-    fig.add_trace(go.Scatter(
-        x=timeline_df.index,
-        y=timeline_df["Actual Power (kW)"],
-        mode="lines",
-        name="Actual Load",
-        line=dict(color="green")
-    ))
+fig.add_trace(go.Scatter(
+    x=timeline_df.index,
+    y=timeline_df["Actual Load"],
+    mode="lines",
+    name="Actual Load",
+    line=dict(color="green")
+))
 
-# ECM vertical line
+# ECM vertical line (SAFE)
 fig.add_shape(
     type="line",
     x0=ECM_DATE,
@@ -278,7 +276,7 @@ fig.add_shape(
     y1=1,
     xref="x",
     yref="paper",
-    line=dict(color="red", width=2, dash="dot"),
+    line=dict(color="red", width=2, dash="dot")
 )
 
 fig.add_annotation(
@@ -292,13 +290,12 @@ fig.add_annotation(
     font=dict(color="red", size=12)
 )
 
-
 fig.update_layout(
     xaxis_title="Date",
     yaxis_title="Power (kW)",
     legend_title="Legend",
-    height=500,
-    margin=dict(l=20, r=20, t=40, b=20)
+    height=520,
+    margin=dict(l=30, r=30, t=50, b=30)
 )
 
 st.plotly_chart(fig, use_container_width=True)
@@ -306,9 +303,10 @@ st.plotly_chart(fig, use_container_width=True)
 st.caption(
     "Vertical red line indicates ECM installation date. "
     "Pre-ECM data represents baseline behaviour, while post-ECM "
-    "data shows adjusted baseline (GRU) and measured consumption "
-    "as required by IPMVP Option C."
+    "data shows GRU-adjusted baseline and measured consumption "
+    "in accordance with IPMVP Option C."
 )
+
 
 # ----------------------------------------------------
 # ADJUSTED BASELINE VS ACTUAL
