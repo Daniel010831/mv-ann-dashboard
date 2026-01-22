@@ -246,14 +246,28 @@ if "Actual Power (kW)" in timeline_df.columns:
     ))
 
 # ECM vertical line
-fig.add_vline(
-    x=ECM_DATE,
-    line_width=2,
-    line_dash="dot",
-    line_color="red",
-    annotation_text="ECM Installation",
-    annotation_position="top left"
+fig.add_shape(
+    type="line",
+    x0=ECM_DATE,
+    x1=ECM_DATE,
+    y0=0,
+    y1=1,
+    xref="x",
+    yref="paper",
+    line=dict(color="red", width=2, dash="dot"),
 )
+
+fig.add_annotation(
+    x=ECM_DATE,
+    y=1,
+    xref="x",
+    yref="paper",
+    text="ECM Installation",
+    showarrow=False,
+    yanchor="bottom",
+    font=dict(color="red", size=12)
+)
+
 
 fig.update_layout(
     xaxis_title="Date",
