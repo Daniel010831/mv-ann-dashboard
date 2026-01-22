@@ -6,9 +6,6 @@ numpy
 matplotlib
 plotly
 scikit-learn
-tensorflow
-torch
-
 
 #to install all the libraries type this in terminal
 #copy and paste 
