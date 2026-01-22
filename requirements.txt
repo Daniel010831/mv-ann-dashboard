@@ -1,12 +1,14 @@
+streamlit==1.29.0
+protobuf==3.20.3
+
 pandas
 numpy
-scikit-learn
 matplotlib
-tensorflow>=2.11
-joblib
-scipy
-streamlit
+plotly
+scikit-learn
+tensorflow
 torch
+
 
 #to install all the libraries type this in terminal
 #copy and paste 
